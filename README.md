@@ -1,68 +1,67 @@
-# Hybrid ATS Job Scraper & Telegram Alerter
+# Job Tracker Pro 
 
-An automated, Dockerized job scraper designed to monitor modern ATS platforms (Greenhouse/Lever) and traditional enterprise portals (Taleo, Oracle Cloud, Workday) for specific roles. It bypasses Web Application Firewalls (like Akamai) using headed Playwright with Xvfb and sends batched alerts directly to your Telegram.
+A self-hosted, full-stack Personal Applicant Tracking System (ATS) designed to automate job searching and streamline application workflows. Job Tracker Pro scrapes job listings from top enterprise ATS portals, helps you track your pipeline with a Kanban board, and leverages Gemini AI to generate tailored `.tex` resumes and cover letters for each specific role.
 
 ## Features
-- **Hybrid Engine:** Fast JSON parsing for Lever/Greenhouse boards, and stealthy Playwright browser scraping for enterprise portals.
-- **Telegram Bot Integration:** Get real-time alerts for new job postings directly to your phone.
-- **Smart Batching:** Consolidates all found jobs into a single clean Telegram message to avoid notification spam.
-- **Database Deduplication:** Uses a local SQLite database (`jobs.db`) to ensure you never receive duplicate alerts for the same job within a 7-day window.
-- **Dockerized:** Runs cleanly on any Linux server, Mac, or Raspberry Pi via a single cron job.
+
+- **Automated Hybrid Job Scraper:** 
+  - Uses fast JSON parsing for Lever and Greenhouse endpoints.
+  - Uses a headless Playwright engine (with stealth capabilities) to bypass Web Application Firewalls (like Akamai) and scrape enterprise portals (Taleo, Workday, etc.).
+  - Deduplicates jobs into a local SQLite database (`jobs.db`) to ensure you never receive duplicate alerts.
+- **Kanban Application Pipeline:** A beautiful React + Vite frontend with Tailwind CSS and glassmorphism. Effortlessly drag-and-drop jobs through stages (New, Applied, Interviewing, Rejected) or perform bulk multi-select actions for fast triage.
+- **AI-Tailored Resumes & Cover Letters:** Integrates with Gemini AI to generate bespoke resumes (exportable as raw `.tex` or PDF via jsPDF) and cover letters specifically tuned to the extracted job description.
+- **Multi-Resume Management:** Upload and manage multiple base resumes (`.pdf` and `.tex`), and select which one to use when generating tailored applications.
+- **Secure & Containerized:**
+  - Full JWT authentication (username/password) to keep your pipeline secure.
+  - Runs in a multi-container Docker Compose setup featuring a FastAPI backend and a Vite frontend.
+- **Telegram Bot Integration:** Get batched real-time alerts for new job postings directly to your phone.
 
 ---
 
 ## 🛠️ Setup Instructions
 
-### 1. Create a Telegram Bot
-1. Open Telegram and search for `@BotFather`.
-2. Send `/newbot` and follow the prompts to create your bot.
-3. Save the **API Token** provided by BotFather.
-4. Open a chat with your new bot and send it a simple "Hello" message.
-5. Go to your browser and visit: `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates`
-6. Look for `"chat": {"id": <CHAT_ID>}` in the JSON response. Save this Chat ID.
-
-### 2. Configure Environment
+### 1. Configure Environment
 Clone this repository and set up your environment variables:
 ```bash
 git clone <your-repo-url>
 cd job-scraper
 cp .env.example .env
 ```
-Open `.env` and paste your Token and Chat ID:
-```env
-TELEGRAM_BOT_TOKEN=your_bot_token_here
-TELEGRAM_CHAT_ID=your_chat_id_here
-```
+Open `.env` and fill in your credentials.
+- Set `APP_USERNAME` and `APP_PASSWORD` to secure your web dashboard.
+- Add your `GEMINI_API_KEY` for AI resume tailoring.
+- (Optional) Add your `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` if you want mobile alerts.
 
-### 3. Build & Run Locally
-Build the Docker image. This installs Python, Playwright, and Xvfb (Virtual Framebuffer for headed browsing):
+### 2. Build & Run
+The easiest way to run both the backend and frontend is via Docker Compose:
 ```bash
-docker build -t job-scraper .
+docker-compose up -d --build
 ```
+Alternatively, you can run the services locally using the provided script:
+```bash
+./start.sh
+```
+This will start the FastAPI Backend on `http://localhost:8000` and the Vite Frontend on `http://localhost:5173` (or `5174` if the port is busy).
 
-Run the container. We map the current directory as a volume so the SQLite `jobs.db` database saves persistently across runs:
-```bash
-docker run --rm --name job-scraper-test -v $(pwd):/app --env-file .env job-scraper
-```
-
-### 4. Deploy via Cron Job
-To run this fully autonomously (e.g., every 4 hours), add it to your server's crontab:
-```bash
-crontab -e
-```
-Add the following line (make sure to update the path to match your deployment directory):
-```bash
-0 */4 * * * cd /path/to/job-scraper && /usr/bin/docker run --rm -v $(pwd):/app --env-file .env job-scraper >> scraper.log 2>&1
-```
+### 3. Log In
+Open your browser to the frontend URL (e.g., `http://localhost:5173`). 
+Log in using the credentials you defined in your `.env` file.
 
 ---
 
-## 🎯 Configuration
+## 🎯 Configuration & Targets
 
 ### `targets.json`
 This file controls which companies are scraped. 
 - For **Greenhouse** and **Lever**, you only need the company name and their ATS Board Token.
-- For **Playwright**, you must provide the exact search URL and the text that appears when NO jobs are found (e.g., "0 jobs" or "no results").
+- For **Playwright**, you provide the search URL. The engine extracts direct job URLs or falls back to presence detection if the site structure is heavily obfuscated.
 
-### `scraper.py`
-Currently, the search keywords (e.g., `software engineer`, `backend`) and target locations are defined as lists at the top of the `scraper.py` file. If you modify them, remember to rebuild the Docker container!
+### Search Settings
+You can modify search keywords, active companies, and cron schedules directly from the **Settings** page in the web dashboard! No need to modify code.
+
+---
+
+## 💻 Tech Stack
+- **Frontend:** React, Vite, Tailwind CSS, Lucide Icons, jsPDF.
+- **Backend:** Python, FastAPI, SQLite, Playwright, PyPDF2, Google Generative AI (Gemini).
+- **Deployment:** Docker, Docker Compose, GitHub Actions.
