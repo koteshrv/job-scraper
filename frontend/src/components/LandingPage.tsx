@@ -88,7 +88,7 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-white animate-pulse" />
+              <Zap className="w-4 h-4 text-white animate-pulse" />
             </div>
             <span className="font-bold text-lg tracking-tight">CareerAgent</span>
           </div>

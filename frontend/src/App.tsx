@@ -6,7 +6,7 @@ import { AnalyticsPage } from "./components/AnalyticsPage"
 import { Login } from "./components/Login"
 import { LandingPage } from "./components/LandingPage"
 import { getToken, clearToken, IS_DEMO } from "@/lib/api"
-import { Sparkles, LayoutDashboard, Settings, History, LineChart, LogOut } from "lucide-react"
+import { Zap, LayoutDashboard, Settings, History, LineChart, LogOut } from "lucide-react"
 import type { ReactNode } from "react"
 
 const NAV = [
@@ -59,7 +59,7 @@ function Layout() {
           <div className="h-20 flex items-center px-6 border-b border-white/5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 flex items-center justify-center shadow-[0_0_20px_rgba(79,70,229,0.3)]">
-                <Sparkles className="w-5 h-5 text-white animate-pulse" />
+                <Zap className="w-5 h-5 text-white animate-pulse" />
               </div>
               <div>
               <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-zinc-400 tracking-tight">

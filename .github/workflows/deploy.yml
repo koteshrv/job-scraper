@@ -38,9 +38,9 @@ jobs:
         working-directory: frontend
         env:
           VITE_DEMO_MODE: "true"
-          # Set base to your GitHub Pages path e.g. /job-scraper/
+          # Set base to your GitHub Pages path e.g. /career-agent/
           # Change this to match your repo name if different
-          VITE_BASE_URL: "/job-scraper/"
+          VITE_BASE_URL: "/career-agent/"
         run: npm run build
 
       # GitHub Pages can't handle client-side routing without this:
