@@ -1,10 +1,182 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { api } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ScrapeConfig } from "./ScrapeConfig"
 import { useToast } from "./Toast"
-import { FileText, Trash2, Cpu, X } from "lucide-react"
+import { FileText, Trash2, Cpu, X, Check, ShieldCheck, ShieldAlert, Lock } from "lucide-react"
+
+// ── Model Priority Picker (drag-to-reorder) ────────────────────────────────────
+type ModelSuggestion = { value: string; label: string; badge?: string }
+
+function ModelPriorityPicker({ label, value, onChange, suggestions }: {
+  label: string; value: string; onChange: (v: string) => void; suggestions: ModelSuggestion[]
+}) {
+  const parseSelected = (v: string) => v.split(",").map(s => s.trim()).filter(Boolean)
+  const [selected, setSelected] = useState<string[]>(() => parseSelected(value))
+  const [dragOver, setDragOver] = useState<number | null>(null)
+  const dragIdx = useRef<number | null>(null)
+
+  useEffect(() => { setSelected(parseSelected(value)) }, [value])
+
+  const emit = (next: string[]) => { setSelected(next); onChange(next.join(", ")) }
+
+  const toggle = (modelValue: string) => {
+    if (selected.includes(modelValue)) emit(selected.filter(s => s !== modelValue))
+    else emit([...selected, modelValue])
+  }
+
+  const moveUp   = (i: number) => { if (i === 0) return; const n=[...selected];[n[i-1],n[i]]=[n[i],n[i-1]]; emit(n) }
+  const moveDown = (i: number) => { if (i===selected.length-1) return; const n=[...selected];[n[i],n[i+1]]=[n[i+1],n[i]]; emit(n) }
+
+  // ── Drag handlers ──
+  const onDragStart = (idx: number) => { dragIdx.current = idx }
+  const onDragOver  = (e: React.DragEvent, idx: number) => { e.preventDefault(); setDragOver(idx) }
+  const onDrop      = (e: React.DragEvent, idx: number) => {
+    e.preventDefault()
+    if (dragIdx.current === null || dragIdx.current === idx) { setDragOver(null); return }
+    const next = [...selected]
+    const [item] = next.splice(dragIdx.current, 1)
+    next.splice(idx, 0, item)
+    dragIdx.current = null
+    setDragOver(null)
+    emit(next)
+  }
+  const onDragEnd = () => { dragIdx.current = null; setDragOver(null) }
+
+  const allModels = [
+    ...suggestions,
+    ...selected
+      .filter(s => !suggestions.some(sg => sg.value === s))
+      .map(s => ({ value: s, label: s, badge: "custom" }))
+  ]
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-zinc-400 mb-2">{label}</label>
+
+      {/* ── Priority list (draggable) ── */}
+      {selected.length > 0 && (
+        <div className="mb-3 space-y-1.5">
+          {selected.map((modelVal, idx) => {
+            const suggestion = allModels.find(s => s.value === modelVal)
+            const isOver = dragOver === idx
+            return (
+              <div
+                key={modelVal}
+                draggable
+                onDragStart={() => onDragStart(idx)}
+                onDragOver={e => onDragOver(e, idx)}
+                onDrop={e => onDrop(e, idx)}
+                onDragEnd={onDragEnd}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all select-none
+                  ${isOver
+                    ? "border-blue-400/60 bg-blue-500/20 scale-[1.01] shadow-lg shadow-blue-500/10"
+                    : "border-blue-500/20 bg-blue-900/15"}`}
+              >
+                {/* Drag handle */}
+                <span
+                  className="text-zinc-600 hover:text-zinc-300 cursor-grab active:cursor-grabbing shrink-0 transition-colors"
+                  title="Drag to reorder"
+                >
+                  <svg className="w-3.5 h-5" viewBox="0 0 10 16" fill="currentColor">
+                    <circle cx="3" cy="2.5" r="1.2"/><circle cx="7" cy="2.5" r="1.2"/>
+                    <circle cx="3" cy="6.5" r="1.2"/><circle cx="7" cy="6.5" r="1.2"/>
+                    <circle cx="3" cy="10.5" r="1.2"/><circle cx="7" cy="10.5" r="1.2"/>
+                    <circle cx="3" cy="14.5" r="1.2"/><circle cx="7" cy="14.5" r="1.2"/>
+                  </svg>
+                </span>
+
+                {/* Position badge */}
+                <span className="w-5 h-5 flex items-center justify-center rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold shrink-0">
+                  {idx + 1}
+                </span>
+                <span className="flex-1 font-mono text-sm text-white truncate">{modelVal}</span>
+                {suggestion?.badge && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-zinc-500 shrink-0">{suggestion.badge}</span>
+                )}
+
+                {/* ↑↓ nudge buttons */}
+                <div className="flex flex-col gap-0.5 shrink-0">
+                  <button onClick={() => moveUp(idx)} disabled={idx === 0}
+                    className="w-5 h-4 flex items-center justify-center rounded hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed text-zinc-400 hover:text-white transition-colors"
+                    title="Move up">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 15l7-7 7 7"/></svg>
+                  </button>
+                  <button onClick={() => moveDown(idx)} disabled={idx === selected.length - 1}
+                    className="w-5 h-4 flex items-center justify-center rounded hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed text-zinc-400 hover:text-white transition-colors"
+                    title="Move down">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"/></svg>
+                  </button>
+                </div>
+
+                {/* Remove */}
+                <button onClick={() => toggle(modelVal)}
+                  className="w-5 h-5 flex items-center justify-center rounded hover:bg-red-500/20 text-zinc-600 hover:text-red-400 transition-colors shrink-0"
+                  title="Remove">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )
+          })}
+          <p className="text-[10px] text-zinc-600 pl-1">Drag ⠿ to reorder · #1 is tried first on failure</p>
+        </div>
+      )}
+
+      {/* ── All models as checkboxes ── */}
+      <div className="rounded-xl border border-white/8 bg-black/20 divide-y divide-white/5 overflow-hidden">
+        {allModels.map(s => {
+          const isChecked = selected.includes(s.value)
+          return (
+            <button key={s.value} onClick={() => toggle(s.value)}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors
+                ${isChecked ? "bg-blue-900/10 hover:bg-blue-900/20" : "hover:bg-white/[0.04]"}`}
+            >
+              <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors
+                ${isChecked ? "bg-blue-500 border-blue-500" : "border-white/20 bg-transparent"}`}>
+                {isChecked && <Check className="w-2.5 h-2.5 text-white" />}
+              </div>
+              <span className={`flex-1 font-mono ${isChecked ? "text-white" : "text-zinc-400"}`}>{s.label}</span>
+              {s.badge && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0
+                  ${isChecked ? "bg-blue-500/15 text-blue-400" : "bg-white/5 text-zinc-600"}`}>
+                  {s.badge}
+                </span>
+              )}
+              {isChecked && (
+                <span className="text-[10px] text-blue-500 font-semibold shrink-0">
+                  #{selected.indexOf(s.value) + 1}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── TOS / Privacy Warning Banner ──────────────────────────────────────────────
+type TosLevel = "warn" | "ok" | "private"
+function TosWarning({ level, text }: { level: TosLevel; text: string }) {
+  const cfg = {
+    warn:    { icon: <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />, bg: "bg-yellow-500/10 border-yellow-500/20", txt: "text-yellow-400", prefix: "⚠ Data Privacy" },
+    ok:      { icon: <ShieldCheck className="w-3.5 h-3.5 shrink-0 mt-0.5" />, bg: "bg-emerald-500/10 border-emerald-500/20", txt: "text-emerald-400", prefix: "✓ Privacy Safe" },
+    private: { icon: <Lock className="w-3.5 h-3.5 shrink-0 mt-0.5" />, bg: "bg-blue-500/10 border-blue-500/20", txt: "text-blue-400", prefix: "🔒 Fully Private" },
+  }[level]
+  return (
+    <div className={`p-2.5 border rounded-lg ${cfg.bg}`}>
+      <div className={`flex items-start gap-2 text-xs ${cfg.txt}`}>
+        {cfg.icon}
+        <div>
+          <span className="font-semibold">{cfg.prefix} — </span>
+          <span className="text-zinc-400">{text}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 
 export function SettingsPage() {
   const { toast } = useToast()
@@ -15,7 +187,8 @@ export function SettingsPage() {
     gemini_model: "gemini-2.5-flash",
     cron_schedule: "0 */4 * * *",
     trash_retention_days: 30,
-    active_companies: ""
+    active_companies: "",
+    api_key_tag: ""
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -256,36 +429,220 @@ export function SettingsPage() {
         </div>
 
         <div className="space-y-4 pt-4 border-t border-white/5">
+          {/* ── AI Generation Mode ── */}
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-1">Gemini API Key (Stored Encrypted)</label>
-            <input
-              type="password"
-              value={settings.gemini_api_key || ""}
-              onChange={e => setSettings({...settings, gemini_api_key: e.target.value})}
-              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
-              placeholder="e.g. AIza..."
-            />
-            <p className="text-xs text-zinc-500 mt-1">Get a key from Google AI Studio. Falls back to the backend's GEMINI_API_KEY env var if left blank.</p>
+            <label className="block text-sm font-medium text-zinc-400 mb-1">AI Generation Mode</label>
+            <div className="relative">
+              <select
+                value={localStorage.getItem("generation_mode") || "gemini"}
+                onChange={e => {
+                  localStorage.setItem("generation_mode", e.target.value)
+                  setSettings({...settings, ai_mode: e.target.value})
+                }}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 pr-10 text-white appearance-none focus:outline-none focus:border-blue-500 cursor-pointer"
+              >
+                <option value="gemini" className="bg-[#12141a]">Google Gemini</option>
+                <option value="openai" className="bg-[#12141a]">OpenAI</option>
+                <option value="anthropic" className="bg-[#12141a]">Anthropic Claude</option>
+                <option value="grok" className="bg-[#12141a]">xAI Grok</option>
+                <option value="ollama" className="bg-[#12141a]">Local Ollama (Private)</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-zinc-400">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
+              </div>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-1">Gemini Model</label>
-            <input
-              type="text"
-              list="gemini-models"
-              value={settings.gemini_model || ""}
-              onChange={e => setSettings({...settings, gemini_model: e.target.value})}
-              className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 font-mono"
-              placeholder="gemini-2.5-flash"
-            />
-            <datalist id="gemini-models">
-              <option value="gemini-2.5-flash" />
-              <option value="gemini-flash-latest" />
-              <option value="gemini-2.5-flash-lite" />
-              <option value="gemini-2.0-flash" />
-            </datalist>
-            <p className="text-xs text-zinc-500 mt-1">Pick a suggestion or type any Gemini model name your key has access to.</p>
-          </div>
+          {/* ── Google Gemini ── */}
+          {(localStorage.getItem("generation_mode") || "gemini") === "gemini" && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-1">Gemini API Key</label>
+                <div className="flex gap-3">
+                  <input
+                    type="password"
+                    value={settings.gemini_api_key || ""}
+                    onChange={e => setSettings({...settings, gemini_api_key: e.target.value})}
+                    className="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                    placeholder="AIza..."
+                  />
+                  <input
+                    type="text"
+                    value={settings.api_key_tag || ""}
+                    onChange={e => setSettings({...settings, api_key_tag: e.target.value})}
+                    className="w-1/3 bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 placeholder:text-zinc-600"
+                    placeholder="Label (e.g. Work)"
+                  />
+                </div>
+              </div>
+              <ModelPriorityPicker
+                label="Model Priority List (fallbacks in order)"
+                value={settings.gemini_model || "gemini-2.5-flash, gemini-1.5-flash"}
+                onChange={v => setSettings({...settings, gemini_model: v})}
+                suggestions={[
+                  { value: "gemini-2.5-flash",   label: "gemini-2.5-flash",   badge: "500 req/day free" },
+                  { value: "gemini-1.5-flash",   label: "gemini-1.5-flash",   badge: "1500 req/day free" },
+                  { value: "gemini-2.0-flash",   label: "gemini-2.0-flash",   badge: "1500 req/day free" },
+                  { value: "gemini-flash-latest",label: "gemini-flash-latest", badge: "→ latest stable flash" },
+                  { value: "gemini-1.5-pro",     label: "gemini-1.5-pro",     badge: "50 req/day free" },
+                  { value: "gemini-2.5-pro",     label: "gemini-2.5-pro",     badge: "50 req/day free" },
+                ]}
+              />
+              {(() => {
+                if (!settings?.model_telemetry) return null;
+                // Helper: same logic as AnalyticsPage
+                const getLimit = (model: string) => {
+                  const m = (model || "").toLowerCase()
+                  if (m.includes("pro")) return 50
+                  if (m === "gemini-flash-latest" || m.endsWith("-flash-latest")) return 500
+                  if (m.includes("2.5") || m.includes("3.") || m.includes("preview") || m.includes("exp")) return 500
+                  if (m.includes("1.5") || m.includes("2.0")) return 1500
+                  return -1
+                }
+                try {
+                  const parsed = JSON.parse(settings.model_telemetry);
+                  const primaryModel = settings.gemini_model?.split(",")[0]?.trim() || "gemini-2.5-flash"
+                  const currentStats = parsed[primaryModel];
+                  if (currentStats) {
+                    const limit = getLimit(primaryModel)
+                    const todayUsed = currentStats.today_requests || 0
+                    const reqsLeft = limit === -1 ? null : Math.max(0, limit - todayUsed)
+                    return (
+                      <div className="p-3 bg-blue-900/10 border border-blue-500/20 rounded-lg flex items-center justify-between text-xs">
+                        <div>
+                          <span className="block font-semibold text-blue-400">Active Model Usage</span>
+                          <span className="text-zinc-400">{(currentStats.prompt_tokens + currentStats.candidate_tokens).toLocaleString()} tokens · {currentStats.requests} requests</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="block font-semibold text-blue-400">Daily Quota</span>
+                          <span className={reqsLeft !== null && reqsLeft < 5 ? "text-red-400 font-bold" : "text-zinc-300"}>
+                            {todayUsed} used / {reqsLeft === null ? "? (alias)" : `${reqsLeft} left`}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  }
+                } catch (e) {}
+                return null;
+              })()}
+              <TosWarning level="warn" text="Google Free Tier API may use your prompts and outputs for model training. Switch to a paid key or use Local Ollama for full privacy." />
+            </>
+          )}
+
+          {/* ── OpenAI ── */}
+          {(localStorage.getItem("generation_mode") || "gemini") === "openai" && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-1">OpenAI API Key</label>
+                <input
+                  type="password"
+                  value={settings.openai_api_key || ""}
+                  onChange={e => setSettings({...settings, openai_api_key: e.target.value})}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                  placeholder="sk-..."
+                />
+              </div>
+              <ModelPriorityPicker
+                label="Model Priority List (fallbacks in order)"
+                value={settings.openai_model || "gpt-4o-mini, gpt-4o"}
+                onChange={v => setSettings({...settings, openai_model: v})}
+                suggestions={[
+                  { value: "gpt-4o-mini", label: "gpt-4o-mini", badge: "fast · cheap" },
+                  { value: "gpt-4o", label: "gpt-4o", badge: "flagship" },
+                  { value: "o3-mini", label: "o3-mini", badge: "reasoning" },
+                  { value: "o1-mini", label: "o1-mini", badge: "reasoning" },
+                  { value: "gpt-4-turbo", label: "gpt-4-turbo", badge: "legacy" },
+                ]}
+              />
+              <TosWarning level="ok" text="OpenAI does not use API data for model training. Your resume data is private and not retained beyond 30 days." />
+            </>
+          )}
+
+          {/* ── Anthropic ── */}
+          {(localStorage.getItem("generation_mode") || "gemini") === "anthropic" && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-1">Anthropic API Key</label>
+                <input
+                  type="password"
+                  value={settings.anthropic_api_key || ""}
+                  onChange={e => setSettings({...settings, anthropic_api_key: e.target.value})}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                  placeholder="sk-ant-..."
+                />
+              </div>
+              <ModelPriorityPicker
+                label="Model Priority List (fallbacks in order)"
+                value={settings.anthropic_model || "claude-3-5-haiku-latest, claude-3-7-sonnet-latest"}
+                onChange={v => setSettings({...settings, anthropic_model: v})}
+                suggestions={[
+                  { value: "claude-3-5-haiku-latest", label: "claude-3-5-haiku-latest", badge: "fast · cheap" },
+                  { value: "claude-3-7-sonnet-latest", label: "claude-3-7-sonnet-latest", badge: "flagship" },
+                  { value: "claude-3-opus-latest", label: "claude-3-opus-latest", badge: "highest quality" },
+                  { value: "claude-3-5-sonnet-latest", label: "claude-3-5-sonnet-latest", badge: "balanced" },
+                ]}
+              />
+              <TosWarning level="ok" text="Anthropic does not use API data for model training. Your resume data is not used to improve their models." />
+            </>
+          )}
+
+          {/* ── xAI Grok ── */}
+          {(localStorage.getItem("generation_mode") || "gemini") === "grok" && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-1">xAI API Key</label>
+                <input
+                  type="password"
+                  value={settings.grok_api_key || ""}
+                  onChange={e => setSettings({...settings, grok_api_key: e.target.value})}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                  placeholder="xai-..."
+                />
+              </div>
+              <ModelPriorityPicker
+                label="Model Priority List (fallbacks in order)"
+                value={settings.grok_model || "grok-3-mini, grok-2-latest"}
+                onChange={v => setSettings({...settings, grok_model: v})}
+                suggestions={[
+                  { value: "grok-3-mini", label: "grok-3-mini", badge: "fast · free tier" },
+                  { value: "grok-3-mini-fast", label: "grok-3-mini-fast", badge: "fastest" },
+                  { value: "grok-2-latest", label: "grok-2-latest", badge: "stable" },
+                  { value: "grok-3-latest", label: "grok-3-latest", badge: "flagship" },
+                ]}
+              />
+              <TosWarning level="warn" text="xAI may use API inputs/outputs for service improvement per their ToS. Review x.ai/legal before using with sensitive data." />
+            </>
+          )}
+
+          {/* ── Local Ollama ── */}
+          {(localStorage.getItem("generation_mode") || "gemini") === "ollama" && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-1">Ollama Server URL</label>
+                <input
+                  type="text"
+                  value={settings.ollama_url || "http://localhost:11434"}
+                  onChange={e => setSettings({...settings, ollama_url: e.target.value})}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 font-mono"
+                  placeholder="http://localhost:11434"
+                />
+              </div>
+              <ModelPriorityPicker
+                label="Model Priority List (fallbacks in order)"
+                value={settings.ollama_model || "llama3.1, llama3.2"}
+                onChange={v => setSettings({...settings, ollama_model: v})}
+                suggestions={[
+                  { value: "llama3.1", label: "llama3.1", badge: "recommended" },
+                  { value: "llama3.2", label: "llama3.2", badge: "latest" },
+                  { value: "llama3.1:8b", label: "llama3.1:8b", badge: "lighter" },
+                  { value: "deepseek-coder-v2", label: "deepseek-coder-v2", badge: "coding" },
+                  { value: "mistral", label: "mistral", badge: "fast" },
+                  { value: "qwen2.5", label: "qwen2.5", badge: "multilingual" },
+                ]}
+              />
+              <TosWarning level="private" text="100% local. Your data never leaves your machine. Pull models with: ollama pull llama3.1" />
+            </>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-zinc-400 mb-1">Custom AI Tailoring Guidelines</label>

@@ -140,7 +140,10 @@ const TECH_KEYWORDS = [
     setGeneratingCL(true)
     setClError(null)
     try {
-      const res = await api.post(`/api/jobs/${job.id}/cover-letter${resumeParam}`)
+      const res = await api.post(`/api/jobs/${job.id}/cover-letter`, {
+        resume: selectedResume || null,
+        generation_mode: localStorage.getItem("generation_mode") || "gemini"
+      })
       onUpdate({...job, cover_letter: res.data.cover_letter})
     } catch (e: any) {
       setClError(e.response?.data?.detail || "Error generating cover letter. Make sure you uploaded a resume and configured a Gemini API key in Settings.")
@@ -152,7 +155,10 @@ const TECH_KEYWORDS = [
     setGeneratingResume(true)
     setResumeError(null)
     try {
-      const res = await api.post(`/api/jobs/${job.id}/tailored-resume${resumeParam}`)
+      const res = await api.post(`/api/jobs/${job.id}/tailored-resume`, {
+        resume: selectedResume || null,
+        generation_mode: localStorage.getItem("generation_mode") || "gemini"
+      })
       setTailoredResume(res.data.tailored_resume)
       onUpdate({...job, tailored_resume: res.data.tailored_resume})
     } catch (e: any) {

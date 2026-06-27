@@ -1,10 +1,18 @@
 import os
 import logging
 import json
+import requests
 from google import genai
 import PyPDF2
 from pathlib import Path
 from dotenv import load_dotenv
+from pydantic import BaseModel
+from fastapi import HTTPException
+
+try:
+    from ollama import Client as OllamaClient
+except ImportError:
+    OllamaClient = None
 
 load_dotenv()
 
@@ -126,9 +134,10 @@ def _generate(prompt: str, api_key: str = None, model_name: str = None) -> str:
     if not resolved_key:
         return "Error: Gemini API key is not configured. Add it in Settings or set GEMINI_API_KEY in the backend environment."
 
-    # Build an ordered, de-duplicated chain: chosen model first, then fallbacks.
+    # Parse comma-separated models from settings, then append system fallbacks
+    user_models = [m.strip() for m in (model_name or "").split(",") if m.strip()]
     chain = []
-    for m in [model_name, DEFAULT_GEMINI_MODEL, *FALLBACK_MODELS]:
+    for m in [*user_models, DEFAULT_GEMINI_MODEL, *FALLBACK_MODELS]:
         if m and m not in chain:
             chain.append(m)
 
@@ -142,13 +151,80 @@ def _generate(prompt: str, api_key: str = None, model_name: str = None) -> str:
                 pt = response.usage_metadata.prompt_token_count or 0
                 ct = response.usage_metadata.candidates_token_count or 0
                 record_token_usage(model, pt, ct)
-            return response.text
+            
+            if response and response.text:
+                return response.text
+                
         except Exception as e:
-            last_err = str(e)
-            logger.warning(f"Gemini model '{model}' failed: {last_err}")
-            if any(h in last_err.lower() for h in _FATAL_ERROR_HINTS):
+            err_msg = str(e)
+            logger.warning(f"Gemini generation failed for model {model}: {err_msg}")
+            last_err = err_msg
+            if any(h in err_msg.lower() for h in _FATAL_ERROR_HINTS):
                 break  # auth/config issue — fallback won't help
+                
     return f"Error generating content (all models failed). Last error: {last_err}"
+
+def _generate_cloud_private(prompt: str, settings: any) -> str:
+    """Placeholder for Cloud Private (OpenAI/Anthropic) logic."""
+    return "Error: Cloud Private (OpenAI/Anthropic) mode is not yet fully implemented."
+
+class OllamaResumeOutput(BaseModel):
+    latex_source: str
+
+class OllamaCoverLetterOutput(BaseModel):
+    cover_letter: str
+
+def _generate_ollama(prompt: str, settings: any, output_schema: BaseModel) -> str:
+    """Uses Ollama SDK with Pydantic structured output."""
+    if not OllamaClient:
+        raise HTTPException(status_code=500, detail="Ollama SDK is not installed. Please run `pip install ollama`.")
+        
+    url = settings.ollama_url or "http://localhost:11434"
+    models_to_try = [m.strip() for m in (settings.ollama_model or "llama3").split(",")]
+    
+    # Check daemon health first to return graceful 503
+    try:
+        health = requests.get(f"{url}/api/tags", timeout=3)
+        health.raise_for_status()
+    except Exception as e:
+        logger.error(f"Ollama daemon unreachable at {url}: {e}")
+        raise HTTPException(status_code=503, detail=f"Ollama daemon is not running or unreachable at {url}.")
+        
+    client = OllamaClient(host=url)
+    last_err = None
+    
+    for model in models_to_try:
+        try:
+            response = client.chat(
+                model=model,
+                messages=[{'role': 'user', 'content': prompt}],
+                format=output_schema.model_json_schema()
+            )
+            content = response.message.content
+            data = json.loads(content)
+            
+            # Depending on schema, return the correct field
+            if "latex_source" in data:
+                return data["latex_source"]
+            elif "cover_letter" in data:
+                return data["cover_letter"]
+            return content
+        except Exception as e:
+            logger.error(f"Ollama generation failed for {model}: {e}")
+            last_err = str(e)
+            
+    return f"Error: Local generation failed - {last_err}"
+
+def _route_generation(prompt: str, mode: str, settings: any, is_tex: bool = False, is_cl: bool = False) -> str:
+    """Factory router for multi-provider AI generation."""
+    if mode == "ollama":
+        schema = OllamaCoverLetterOutput if is_cl else OllamaResumeOutput
+        return _generate_ollama(prompt, settings, schema)
+    elif mode in ("openai", "anthropic", "grok"):
+        return _generate_cloud_private(prompt, settings)
+    else:
+        # Default: Cloud Free (Gemini)
+        return _generate(prompt, settings.gemini_api_key, settings.gemini_model)
 
 def _get_custom_guidelines() -> str:
     """Helper to fetch custom user guidelines from the Settings database."""
@@ -165,10 +241,16 @@ def _get_custom_guidelines() -> str:
         db.close()
     return ""
 
-def generate_cover_letter(job_title: str, company: str, location: str = "", description: str = "", api_key: str = None, model_name: str = None, resume_name: str = None) -> str:
+def generate_cover_letter(job_title: str, company: str, location: str = "", description: str = "", api_key: str = None, model_name: str = None, resume_name: str = None, generation_mode: str = "cloud_free") -> str:
     resume_text = extract_resume_text(resume_name)
     if not resume_text:
         return "Error: Could not read resume. Please upload your resume first."
+        
+    from .database import SessionLocal
+    from . import models
+    db = SessionLocal()
+    settings = db.query(models.Settings).first()
+    db.close()
 
     jd_context = f"\n\nJob Description Context:\n---\n{description}\n---\n" if description else ""
     
@@ -192,12 +274,18 @@ Requirements:
 - Focus strictly on matching the resume skills to the likely requirements of {job_title}{' based on the provided Job Description context' if description else ''}.
 {custom_directive}
 """
-    return _generate(prompt, api_key, model_name)
+    return _route_generation(prompt, generation_mode, settings, is_tex=False, is_cl=True)
 
-def generate_tailored_resume(job_title: str, company: str, location: str = "", description: str = "", api_key: str = None, model_name: str = None, resume_name: str = None) -> str:
+def generate_tailored_resume(job_title: str, company: str, location: str = "", description: str = "", api_key: str = None, model_name: str = None, resume_name: str = None, generation_mode: str = "cloud_free") -> str:
     resume_text = extract_resume_text(resume_name)
     if not resume_text:
         return "Error: Could not read resume. Please upload your resume first."
+        
+    from .database import SessionLocal
+    from . import models
+    db = SessionLocal()
+    settings = db.query(models.Settings).first()
+    db.close()
 
     path = _resume_path(resume_name)
     is_tex = bool(path) and path.suffix.lower() == ".tex"
@@ -232,10 +320,10 @@ Rules:
 - The original is a LaTeX document. Return a COMPLETE, COMPILABLE LaTeX document.
 - Preserve the original preamble, document class, packages, commands, and overall formatting/structure exactly. Only change the textual content to tailor it.
 - Output raw LaTeX only. Do NOT wrap it in markdown code fences or add commentary."""
-        return _generate(prompt, api_key, model_name)
+        return _route_generation(prompt, generation_mode, settings, is_tex=True, is_cl=False)
     else:
         prompt = shared + "\n- Return ONLY the updated markdown text."
-        return _generate(prompt, api_key, model_name)
+        return _route_generation(prompt, generation_mode, settings, is_tex=False, is_cl=False)
 
 def extract_resume_keywords(resume_text: str, api_key: str = None, model_name: str = None) -> str:
     """Extracts a JSON array of up to 30 technical keywords from the resume text."""

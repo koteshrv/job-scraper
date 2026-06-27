@@ -47,6 +47,10 @@ class Job(JobBase):
     class Config:
         from_attributes = True
 
+class GenerationRequest(BaseModel):
+    resume: Optional[str] = None
+    generation_mode: Optional[str] = None
+
 class SettingsBase(BaseModel):
     telegram_chat_id: Optional[str] = None
     telegram_bot_token: Optional[str] = None
@@ -61,6 +65,14 @@ class SettingsBase(BaseModel):
     total_candidate_tokens: Optional[int] = 0
     custom_guidelines: Optional[str] = None
     model_telemetry: Optional[str] = None
+    api_key_tag: Optional[str] = None
+    
+    ai_mode: Optional[str] = "gemini"
+    openai_api_key: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
+    grok_api_key: Optional[str] = None
+    ollama_url: Optional[str] = "http://localhost:11434"
+    ollama_model: Optional[str] = "llama3"
 
 class Settings(SettingsBase):
     id: int

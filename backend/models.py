@@ -39,6 +39,15 @@ class Settings(Base):
     total_candidate_tokens = Column(Integer, default=0)
     custom_guidelines = Column(String, nullable=True)
     model_telemetry = Column(String, nullable=True) # JSON object tracking per-model statistics
+    api_key_tag = Column(String, nullable=True)
+    
+    # AI Provider routing
+    ai_mode = Column(String, default="gemini") # "gemini", "openai", "anthropic", "grok", "ollama"
+    openai_api_key = Column(String, nullable=True)
+    anthropic_api_key = Column(String, nullable=True)
+    grok_api_key = Column(String, nullable=True)
+    ollama_url = Column(String, default="http://localhost:11434")
+    ollama_model = Column(String, default="llama3")
 
 class ScraperLog(Base):
     __tablename__ = "scraper_logs"

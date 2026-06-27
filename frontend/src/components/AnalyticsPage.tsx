@@ -4,6 +4,30 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from "recharts"
 import { Cpu, TrendingUp, Filter } from "lucide-react"
 
+/**
+ * Returns the Gemini free-tier daily request limit for a given model name.
+ * Returns -1 for unknown/alias models where limit can't be determined.
+ *
+ * Sources: https://ai.google.dev/pricing (June 2025)
+ *  - gemini-1.5-flash, 2.0-flash       → 1500 req/day
+ *  - gemini-2.5-flash, 3.x-flash       → 500 req/day
+ *  - gemini-flash-latest (alias)        → 500 req/day (resolves to latest flash ≥ 2.5)
+ *  - gemini-*-pro, gemini-2.5-pro etc  → 50 req/day
+ */
+function getModelDailyLimit(model: string): number {
+  const m = (model || "").toLowerCase()
+  // Pro models — most restrictive
+  if (m.includes("pro")) return 50
+  // Aliases that resolve to current latest flash (≥ 2.5 family → 500/day)
+  if (m === "gemini-flash-latest" || m.endsWith("-flash-latest")) return 500
+  // Newer flash generations: 2.5, 3.x, experimental/preview
+  if (m.includes("2.5") || m.includes("3.") || m.includes("preview") || m.includes("exp")) return 500
+  // Older flash: 1.5-flash and 2.0-flash → 1500/day
+  if (m.includes("1.5") || m.includes("2.0")) return 1500
+  // Unknown — return -1 so UI can show '?'
+  return -1
+}
+
 export function AnalyticsPage() {
   const [jobs, setJobs] = useState<any[]>([])
   const [settings, setSettings] = useState<any>(null)
@@ -89,7 +113,8 @@ export function AnalyticsPage() {
         const cost = ((stats.prompt_tokens / 1000000) * rateIn) + ((stats.candidate_tokens / 1000000) * rateOut)
         calculatedCost += cost
         
-        const dailyLimit = isModelPro ? 50 : 1500
+        let dailyLimit = getModelDailyLimit(model);
+
         const todayRequests = stats.today_requests || 0
         const requestsLeft = Math.max(0, dailyLimit - todayRequests)
 
@@ -106,6 +131,24 @@ export function AnalyticsPage() {
       })
     } catch (e) {}
   }
+
+  // Fallback to current model if telemetry is completely empty
+  if (modelStats.length === 0 && settings?.gemini_model) {
+    let dailyLimit = getModelDailyLimit(settings.gemini_model);
+
+    modelStats.push({
+      model: settings.gemini_model,
+      requests: 0,
+      promptTokens: 0,
+      candidateTokens: 0,
+      cost: 0,
+      todayRequests: 0,
+      dailyLimit: dailyLimit,
+      requestsLeft: dailyLimit
+    })
+  }
+
+  const totalRequests = modelStats.reduce((acc, curr) => acc + curr.requests, 0)
 
   // Fallback if telemetry empty
   if (calculatedCost === 0 && (promptTokens > 0 || candidateTokens > 0)) {
@@ -200,13 +243,20 @@ export function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Gemini API Usage Telemetry */}
+        {/* AI API Usage Telemetry */}
         <div className="bg-[#12141a] rounded-2xl border border-white/5 p-6 shadow-xl flex flex-col justify-between">
           <div>
-            <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-2">
-              <Cpu className="w-5 h-5 text-purple-400" />
-              Gemini API Telemetry
-            </h3>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-lg font-bold text-white">
+                <Cpu className="w-5 h-5 text-purple-400" />
+                AI API Telemetry
+              </div>
+              {settings?.is_free_tier && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                  Tag: {settings.api_key_tag}
+                </span>
+              )}
+            </div>
             <div className="flex justify-between items-center mb-4">
               <p className="text-xs text-zinc-400">Real-time tracking of tokens & API limits.</p>
               <button 
@@ -216,7 +266,11 @@ export function AnalyticsPage() {
                 {isFreeTier ? "Free Tier" : "Pay-as-you-go"}
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="bg-black/30 border border-white/5 rounded-xl p-4">
+                <span className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-1">Requests</span>
+                <span className="text-lg font-bold text-white font-mono">{totalRequests}</span>
+              </div>
               <div className="bg-black/30 border border-white/5 rounded-xl p-4">
                 <span className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-1">Input Tokens</span>
                 <span className="text-lg font-bold text-white font-mono">{promptTokens.toLocaleString()}</span>
@@ -227,29 +281,88 @@ export function AnalyticsPage() {
               </div>
             </div>
 
-            {modelStats.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
-                <span className="block text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Model Breakdown</span>
-                <div className="space-y-2 max-h-[145px] overflow-y-auto custom-scrollbar pr-1">
-                  {modelStats.map((item, idx) => (
-                    <div key={idx} className="flex flex-col bg-black/20 border border-white/5 rounded-lg p-2.5 text-xs">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="block font-semibold text-zinc-300 font-mono">{item.model}</span>
-                        <span className="font-mono font-bold text-zinc-400">{isFreeTier ? "$0.00" : `$${item.cost.toFixed(5)}`}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[10px] text-zinc-500">
-                        <span>{item.requests} total reqs • {item.promptTokens.toLocaleString()} in / {item.candidateTokens.toLocaleString()} out</span>
-                        {isFreeTier && (
-                          <span className={item.requestsLeft < 5 ? "text-red-400 font-bold" : "text-blue-400 font-medium"}>
-                            {item.todayRequests} / {item.dailyLimit} reqs today
-                          </span>
-                        )}
-                      </div>
+            <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Model Breakdown</div>
+            <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar pr-2">
+              {modelStats.length === 0 ? (
+                <div className="text-zinc-500 text-sm">No telemetry data available yet.</div>
+              ) : (
+                modelStats.map(stats => (
+                  <div key={stats.model} className="p-4 bg-blue-900/10 border border-blue-500/20 rounded-xl flex flex-col gap-2">
+                    <div className="flex justify-between items-center">
+                      <span className="font-mono text-blue-400 font-semibold text-sm">{stats.model}</span>
+                      <span className="font-bold text-white whitespace-nowrap">${stats.cost.toFixed(2)}</span>
                     </div>
-                  ))}
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-zinc-400">
+                        {stats.requests.toLocaleString()} reqs &bull; {stats.promptTokens.toLocaleString()} in / {stats.candidateTokens.toLocaleString()} out
+                      </span>
+                      <span
+                        title={stats.dailyLimit === -1 ? "Alias model — limit depends on resolved version" : undefined}
+                        className={`font-semibold text-right whitespace-nowrap ${
+                          stats.dailyLimit !== -1 && stats.requestsLeft < 5 ? "text-red-400" : "text-blue-300"
+                        }`}
+                      >
+                        {stats.todayRequests.toLocaleString()} / {stats.dailyLimit === -1 ? "? (alias)" : stats.dailyLimit.toLocaleString()} reqs today
+                      </span>
+                    </div>
+                    {/* Per-model quota bar */}
+                    {stats.dailyLimit > 0 && (
+                      <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${stats.requestsLeft < 5 ? "bg-red-500" : "bg-blue-500"}`}
+                          style={{ width: `${Math.min(100, (stats.todayRequests / stats.dailyLimit) * 100)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* ── Combined Fallback Capacity ── */}
+            {modelStats.length > 1 && (() => {
+              const known = modelStats.filter(s => s.dailyLimit > 0)
+              const totalCap = known.reduce((a, s) => a + s.dailyLimit, 0)
+              const totalUsed = known.reduce((a, s) => a + s.todayRequests, 0)
+              const totalLeft = Math.max(0, totalCap - totalUsed)
+              const pct = totalCap > 0 ? Math.min(100, (totalUsed / totalCap) * 100) : 0
+              if (totalCap === 0) return null
+              return (
+                <div className="mt-3 p-3 bg-emerald-900/10 border border-emerald-500/20 rounded-xl">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-emerald-400">Combined Fallback Capacity</span>
+                    <span className="text-xs text-zinc-400 font-mono">
+                      {totalUsed.toLocaleString()} used / <span className="text-white font-semibold">{totalLeft.toLocaleString()} left</span>
+                    </span>
+                  </div>
+                  {/* Segmented bar — each model gets a coloured segment */}
+                  <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden flex gap-px">
+                    {known.map((s, i) => {
+                      const colours = ["bg-blue-500","bg-violet-500","bg-cyan-500","bg-indigo-500","bg-sky-500"]
+                      const segPct = (s.dailyLimit / totalCap) * 100
+                      const usedPct = s.dailyLimit > 0 ? Math.min(100, (s.todayRequests / s.dailyLimit) * 100) : 0
+                      return (
+                        <div key={s.model} className="relative overflow-hidden rounded-sm" style={{ width: `${segPct}%` }}
+                          title={`${s.model}: ${s.todayRequests}/${s.dailyLimit} req/day`}>
+                          <div className="w-full h-full bg-white/5" />
+                          <div className={`absolute inset-y-0 left-0 ${colours[i % colours.length]} opacity-80`}
+                            style={{ width: `${usedPct}%` }} />
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="flex justify-between mt-1.5">
+                    <span className="text-[10px] text-zinc-600">Each segment = one model's quota</span>
+                    <span className="text-[10px] text-emerald-500 font-semibold">{totalCap.toLocaleString()} req/day total</span>
+                  </div>
+                  {pct < 100 && (
+                    <p className="text-[10px] text-zinc-600 mt-1">
+                      Fallback order: {known.map(s => s.model.replace("gemini-","")).join(" → ")}
+                    </p>
+                  )}
                 </div>
-              </div>
-            )}
+              )
+            })()}
           </div>
           <div className="bg-purple-950/20 border border-purple-500/20 rounded-xl p-4 flex items-center justify-between mt-4">
             <div>

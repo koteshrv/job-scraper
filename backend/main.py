@@ -253,15 +253,16 @@ def remove_resume(name: str):
     return {"deleted": name, "resumes": ai_agent.list_resumes()}
 
 @app.post("/api/jobs/{job_id}/cover-letter")
-def generate_cl_for_job(job_id: int, resume: str = None, db: Session = Depends(get_db)):
+def generate_cl_for_job(job_id: int, req: schemas.GenerationRequest, db: Session = Depends(get_db)):
     db_job = crud.get_job(db, job_id)
     if not db_job:
         raise HTTPException(status_code=404, detail="Job not found")
 
     settings = crud.get_settings(db)
-    cl_text = generate_cover_letter(
+    cl_text = ai_agent.generate_cover_letter(
         db_job.title, db_job.company, db_job.location or "", db_job.description or "",
-        api_key=settings.gemini_api_key, model_name=settings.gemini_model, resume_name=resume
+        api_key=settings.gemini_api_key, model_name=settings.gemini_model, resume_name=req.resume,
+        generation_mode=req.generation_mode
     )
     if cl_text.startswith("Error"):
         raise HTTPException(status_code=400, detail=cl_text)
@@ -270,15 +271,16 @@ def generate_cl_for_job(job_id: int, resume: str = None, db: Session = Depends(g
     return {"cover_letter": cl_text}
 
 @app.post("/api/jobs/{job_id}/tailored-resume")
-def generate_resume_for_job(job_id: int, resume: str = None, db: Session = Depends(get_db)):
+def generate_resume_for_job(job_id: int, req: schemas.GenerationRequest, db: Session = Depends(get_db)):
     db_job = crud.get_job(db, job_id)
     if not db_job:
         raise HTTPException(status_code=404, detail="Job not found")
 
     settings = crud.get_settings(db)
-    resume_text = generate_tailored_resume(
+    resume_text = ai_agent.generate_tailored_resume(
         db_job.title, db_job.company, db_job.location or "", db_job.description or "",
-        api_key=settings.gemini_api_key, model_name=settings.gemini_model, resume_name=resume
+        api_key=settings.gemini_api_key, model_name=settings.gemini_model, resume_name=req.resume,
+        generation_mode=req.generation_mode
     )
     if resume_text.startswith("Error"):
         raise HTTPException(status_code=400, detail=resume_text)
