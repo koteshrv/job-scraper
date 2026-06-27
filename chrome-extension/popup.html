@@ -3,25 +3,30 @@
 <head>
   <style>
     body {
-      width: 300px;
+      width: 320px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       padding: 16px;
       background-color: #09090b;
       color: #fff;
       margin: 0;
     }
-    h2 { margin-top: 0; font-size: 16px; color: #fff; }
-    .input-group { margin-bottom: 16px; }
-    label { display: block; font-size: 12px; margin-bottom: 4px; color: #a1a1aa; }
+    h2 { margin-top: 0; font-size: 16px; color: #fff; margin-bottom: 16px; }
+    .input-group { margin-bottom: 12px; }
+    label { display: block; font-size: 11px; margin-bottom: 4px; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.05em; }
     input {
       width: 100%;
       box-sizing: border-box;
-      padding: 8px;
+      padding: 8px 12px;
       background: #18181b;
       border: 1px solid #27272a;
       border-radius: 6px;
       color: #fff;
       font-size: 13px;
+      transition: border-color 0.2s;
+    }
+    input:focus {
+      outline: none;
+      border-color: #2563eb;
     }
     button {
       width: 100%;
@@ -32,6 +37,7 @@
       border-radius: 6px;
       cursor: pointer;
       font-weight: 600;
+      font-size: 13px;
       transition: background-color 0.2s;
     }
     button:hover { background-color: #1d4ed8; }
@@ -39,16 +45,63 @@
     #status { margin-top: 12px; font-size: 13px; text-align: center; }
     .success { color: #22c55e; }
     .error { color: #ef4444; }
+    .hidden { display: none !important; }
+    
+    /* View specific styles */
+    .view-card {
+      background: #09090b;
+    }
+    .footer-actions {
+      margin-top: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-t: 1px solid #27272a;
+      padding-top: 12px;
+    }
+    .text-link {
+      font-size: 11px;
+      color: #a1a1aa;
+      text-decoration: underline;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+    .text-link:hover { color: #ef4444; }
   </style>
 </head>
 <body>
   <h2>Job Tracker Pro</h2>
-  <div class="input-group">
-    <label for="apiUrl">Backend API URL</label>
-    <input type="text" id="apiUrl" value="http://127.0.0.1:8000" />
+
+  <!-- Login View -->
+  <div id="loginView" class="view-card">
+    <div class="input-group">
+      <label for="apiUrl">Backend API URL</label>
+      <input type="text" id="apiUrl" value="http://127.0.0.1:8000" />
+    </div>
+    <div class="input-group">
+      <label for="username">Username</label>
+      <input type="text" id="username" placeholder="admin" />
+    </div>
+    <div class="input-group">
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="Password" />
+    </div>
+    <button id="loginBtn" style="margin-top: 8px;">Log In & Sync</button>
   </div>
-  <button id="saveBtn">Save Active Job</button>
+
+  <!-- Action View -->
+  <div id="actionView" class="view-card hidden">
+    <button id="saveBtn">Save Active Job</button>
+    <div class="footer-actions">
+      <span id="activeUser" style="font-size: 11px; color: #71717a;"></span>
+      <button id="logoutBtn" class="text-link">Log Out</button>
+    </div>
+  </div>
+
   <div id="status"></div>
+  
   <script src="popup.js"></script>
 </body>
 </html>

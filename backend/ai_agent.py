@@ -1,5 +1,6 @@
 import os
 import logging
+import json
 from google import genai
 import PyPDF2
 from pathlib import Path

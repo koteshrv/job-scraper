@@ -15,7 +15,7 @@ import logging
 
 from . import models, schemas, crud, scheduler, ai_agent, auth
 from .database import engine, get_db
-from .scraper_core import run_scraper, load_targets, fetch_job_description
+from .scraper_core import run_scraper, load_targets, fetch_job_description, record_job
 from .ai_agent import generate_cover_letter, generate_tailored_resume
 
 logger = logging.getLogger(__name__)
@@ -148,7 +148,7 @@ def save_from_extension(payload: ExtensionPayload, db: Session = Depends(get_db)
     title = parsed.get("title", payload.page_title)
 
     # Save to Kanban
-    job = scraper_core.record_job(db, company, title, payload.url, "")
+    job = record_job(db, company, title, payload.url, "")
     
     # Update description directly
     job_update = schemas.JobUpdate(description=payload.description)
