@@ -1,6 +1,6 @@
 # Agent Knowledge & Architecture Document
 
-This document serves as a complete reference for any AI agent or developer working on the `job-scraper` project. It details the architecture, the scraping mechanics, the hard-learned lessons (especially around difficult Angular sites like TCS iBegin), current status, and future improvements.
+This document serves as a complete reference for any AI agent or developer working on the `career-agent` project. It details the architecture, the scraping mechanics, the hard-learned lessons (especially around difficult Angular sites like TCS iBegin), current status, and future improvements.
 
 ## 1. System Architecture
 

@@ -225,5 +225,69 @@
     "intersect_with": "https://jobs.smartrecruiters.com/?keyword=india",
     "no_results_text": "0 jobs",
     "job_url_pattern": "/\\d+-"
+  },
+  {
+    "company": "Flipkart",
+    "type": "playwright",
+    "url": "https://flipkart.turbohire.co/dashboardv2?orgId=4d757ba0-3d57-448a-b82c-238ed87ac90f&type=0",
+    "no_results_text": "0 jobs"
+  },
+  {
+    "company": "Swiggy",
+    "type": "playwright",
+    "url": "https://careers.swiggy.com/#/careers?src=careers&search=title:{keyword}",
+    "no_results_text": "no jobs found",
+    "job_url_pattern": "job-details"
+  },
+  {
+    "company": "Paytm",
+    "type": "lever",
+    "api_board_token": "paytmpayments"
+  },
+  {
+    "company": "Cred",
+    "type": "playwright",
+    "url": "https://careers.cred.club/openings",
+    "no_results_text": "no open roles"
+  },
+  {
+    "company": "Razorpay",
+    "type": "greenhouse",
+    "api_board_token": "razorpaysoftwareprivatelimited"
+  },
+  {
+    "company": "Zepto",
+    "type": "playwright",
+    "url": "https://zepto.talentrecruit.com/career-page",
+    "no_results_text": "0 jobs"
+  },
+  {
+    "company": "Zoho",
+    "type": "playwright",
+    "url": "https://careers.zohocorp.com/jobs/Careers",
+    "no_results_text": "no open roles",
+    "job_url_pattern": "/jobs/Careers/\\d+"
+  },
+  {
+    "company": "Persistent Systems",
+    "type": "zwayam",
+    "api_url": "https://apipersistent.zwayam.com/jobs/search",
+    "domain": "careers.persistent.com",
+    "company_id": "MTQ5Nzc="
+  },
+  {
+    "company": "Mphasis",
+    "type": "playwright",
+    "url": "https://mphasis.ripplehire.com/candidate/?token=ty4DfyWddnOrtpclQeia&source=CAREERSITE#list/search={keyword}",
+    "no_results_text": "0 jobs",
+    "job_url_pattern": "#detail/job/\\d+"
+  },
+  {
+    "company": "Hexaware Technologies",
+    "type": "playwright",
+    "url": "https://jobs.hexaware.com/#en/sites/CX_1/jobs?keyword={keyword}&location=India&locationId=300000000446279&locationLevel=country&mode=location",
+    "no_results_text": "no jobs found",
+    "extra_wait_ms": 10000,
+    "job_url_pattern": "/job/"
   }
 ]

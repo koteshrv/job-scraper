@@ -15,8 +15,8 @@ from backend.scraper_core import (
     process_greenhouse, 
     process_lever, 
     process_api_post,
-    process_tcs_api,
     process_tech_mahindra,
+    process_zwayam,
     process_playwright
 )
 
@@ -66,6 +66,8 @@ async def test_all_targets(filter_companies: list = None, headless: bool = False
             process_api_post(db, target, keywords, new_jobs, company_logs)
         elif t_type == "tech_mahindra":
             process_tech_mahindra(db, target, keywords, new_jobs, company_logs)
+        elif t_type == "zwayam":
+            process_zwayam(db, target, keywords, locations, new_jobs, company_logs)
         elif t_type == "playwright":
             playwright_targets.append(target)
             continue
