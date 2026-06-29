@@ -183,6 +183,16 @@ def _generate(prompt: str, api_key: str = None, model_name: str = None) -> str:
     resolved_key = api_key or ENV_API_KEY
     resolved_model = model_name
     
+    # If the caller passed an encrypted Fernet token directly, decrypt it.
+    if resolved_key and isinstance(resolved_key, str) and resolved_key.startswith("gAAAAA"):
+        try:
+            from .crypto import decrypt_value
+            decrypted = decrypt_value(resolved_key)
+            if decrypted:
+                resolved_key = decrypted
+        except Exception as e:
+            logger.error(f"Failed to decrypt provided API key: {e}")
+            
     from .database import SessionLocal
     from . import models
     db = SessionLocal()
